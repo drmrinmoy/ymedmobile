@@ -1,0 +1,82 @@
+{
+  "expo": {
+    "name": "YMed",
+    "slug": "ymed",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "scheme": "ymed",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff",
+      "dark": {
+        "image": "./assets/dark/splash.png",
+        "backgroundColor": "#1F2937"
+      }
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ai.ymed.app",
+      "newArchEnabled": true,
+      "associatedDomains": ["applinks:ymed.ai"],
+      "config": {
+        "googleSignIn": {
+          "reservedClientId": "143768372586-b2q9b0oqnqkqinpi04cdnech4m016a95.apps.googleusercontent.com"
+        }
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff",
+        "dark": {
+          "foregroundImage": "./assets/dark/adaptive-icon.png",
+          "backgroundColor": "#1F2937"
+        }
+      },
+      "package": "ai.ymed.app",
+      "newArchEnabled": true,
+      "googleServicesFile": "./google-services.json",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "ymed.ai",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-font"
+    ],
+    "experiments": {
+      "tsconfigPaths": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "14cc4d13-4ee1-4772-b36f-f7cc73ed9881"
+      },
+      "googleSignIn": {
+        "webClientId": "143768372586-6f6j06hb0qajrkicpgn2jifhsqhu5kq8.apps.googleusercontent.com",
+        "iosClientId": "143768372586-b2q9b0oqnqkqinpi04cdnech4m016a95.apps.googleusercontent.com",
+        "androidClientId": "143768372586-4ktqcdj7kf6jq482di54delajv2ikt9h.apps.googleusercontent.com"
+      }
+    },
+    "newArchEnabled": true
+  }
+}
