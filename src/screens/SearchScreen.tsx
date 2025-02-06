@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Pressable, Dimensions, ActivityIndicator } from 'react-native';
-import { Text, Chip, Searchbar, List } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, Pressable, Dimensions, ActivityIndicator, Platform, StatusBar, SafeAreaView, Keyboard, TouchableWithoutFeedback } from 'react-native';
+import { Text, Chip, Searchbar, List, Surface } from 'react-native-paper';
 import { useTheme } from '../providers/ThemeProvider';
 import { Ionicons } from '@expo/vector-icons';
 import { useDebounce } from 'use-debounce';
@@ -10,6 +10,7 @@ import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, TabParamList } from '../types/navigation';
+import { useRouter } from 'expo-router';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<TabParamList, 'Search'>,
@@ -37,7 +38,8 @@ const POPULAR_CATEGORIES = [
   { title: 'Emergency', icon: 'medkit-outline' },
 ];
 
-const TABS = ['All', 'Guidelines', 'Cases', 'Calculators', 'Quizzes', 'Drugs'];
+const TABS = ['All', 'Guidelines', 'Cases', 'Calculators', 'Quizzes', 'Drugs'] as const;
+type TabType = typeof TABS[number];
 
 interface SearchResults {
   guidelines: SearchResult[];
@@ -47,11 +49,12 @@ interface SearchResults {
   drugs: SearchResult[];
 }
 
-export default function SearchScreen({ navigation }: Props) {
+export default function SearchScreen() {
+  const router = useRouter();
   const { colors } = useTheme();
   const [query, setQuery] = useState('');
   const [debouncedQuery] = useDebounce(query, 300);
-  const [activeTab, setActiveTab] = useState('All');
+  const [activeTab, setActiveTab] = useState<TabType>('All');
   const [results, setResults] = useState<SearchResults>({
     guidelines: [],
     cases: [],
@@ -61,13 +64,12 @@ export default function SearchScreen({ navigation }: Props) {
   });
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
 
   const handleSearch = async () => {
     if (!debouncedQuery) return;
     
     setLoading(true);
-    setShowSuggestions(false);
     
     try {
       const response = await axios.get(`${API_URL}/api/search`, {
@@ -108,9 +110,8 @@ export default function SearchScreen({ navigation }: Props) {
   // Update the useEffect for autocomplete
   useEffect(() => {
     const fetchSuggestions = async () => {
-      if (!debouncedQuery || debouncedQuery.length < 2) {
+      if (!debouncedQuery || debouncedQuery.length < 2 || !isFocused) {
         setSuggestions([]);
-        setShowSuggestions(false);
         return;
       }
 
@@ -120,7 +121,6 @@ export default function SearchScreen({ navigation }: Props) {
         });
         const suggestions = response.data.slice(0, 5).map((item: SearchResult) => item.title);
         setSuggestions(suggestions);
-        setShowSuggestions(true);
       } catch (error) {
         console.error('Autocomplete error:', error);
         setSuggestions([]);
@@ -128,55 +128,100 @@ export default function SearchScreen({ navigation }: Props) {
     };
 
     fetchSuggestions();
-  }, [debouncedQuery]);
+  }, [debouncedQuery, isFocused]);
+
+  // Add keyboard listener effect
+  useEffect(() => {
+    const keyboardDidHide = Keyboard.addListener('keyboardDidHide', () => {
+      setIsFocused(false);
+    });
+
+    return () => {
+      keyboardDidHide.remove();
+    };
+  }, []);
 
   // Update the useEffect for search results
   useEffect(() => {
     handleSearch();
   }, [debouncedQuery, activeTab]);
 
+  const handleSuggestionPress = (suggestion: string) => {
+    setQuery(suggestion);
+    setIsFocused(false);
+    Keyboard.dismiss();
+    handleSearch();
+  };
+
+  const handleOutsidePress = () => {
+    setIsFocused(false);
+    Keyboard.dismiss();
+  };
+
   const renderSearchBar = () => (
     <View style={styles.searchBarContainer}>
-      <Searchbar
-        placeholder="Search guidelines, cases, drugs..."
-        onChangeText={(text) => {
-          setQuery(text);
-          setShowSuggestions(true);
-        }}
-        value={query}
-        onFocus={() => setShowSuggestions(true)}
-        onBlur={() => {
-          // Small delay to allow item click to register
-          setTimeout(() => setShowSuggestions(false), 200);
-        }}
-        style={[styles.searchBar, { backgroundColor: colors.surfaceVariant }]}
-        iconColor={colors.onSurfaceVariant}
-        inputStyle={{ color: colors.onSurface }}
-        placeholderTextColor={colors.onSurfaceVariant}
-      />
-      {showSuggestions && suggestions.length > 0 && (
-        <View style={[styles.suggestionsContainer, { backgroundColor: colors.surface }]}>
+      <Surface style={[styles.searchBarSurface, { backgroundColor: colors.surface }]} elevation={2}>
+        <Searchbar
+          placeholder="Search guidelines, cases, drugs..."
+          onChangeText={(text) => {
+            setQuery(text);
+            if (text.length >= 2) {
+              setIsFocused(true);
+            }
+          }}
+          value={query}
+          onFocus={() => {
+            setIsFocused(true);
+          }}
+          onSubmitEditing={handleOutsidePress}
+          style={[styles.searchBar, { backgroundColor: colors.surfaceVariant }]}
+          iconColor={colors.onSurfaceVariant}
+          inputStyle={{ 
+            color: colors.onSurface,
+            fontSize: 16,
+          }}
+          placeholderTextColor={colors.onSurfaceVariant}
+        />
+      </Surface>
+      {isFocused && suggestions.length > 0 && (
+        <Surface 
+          style={[
+            styles.suggestionsContainer, 
+            { backgroundColor: colors.surface }
+          ]} 
+          elevation={3}
+        >
           {suggestions.map((suggestion, index) => (
-            <List.Item
+            <Pressable
               key={index}
-              title={suggestion}
-              onPress={() => {
-                setQuery(suggestion);
-                setShowSuggestions(false);
-                handleSearch();
-              }}
-              titleStyle={{ color: colors.onSurface }}
-              style={styles.suggestionItem}
-              left={props => <List.Icon {...props} icon="magnify" />}
-            />
+              onPress={() => handleSuggestionPress(suggestion)}
+              style={({ pressed }) => [
+                styles.suggestionItem,
+                { 
+                  backgroundColor: pressed ? `${colors.primary}10` : 'transparent',
+                  borderBottomWidth: index === suggestions.length - 1 ? 0 : 1,
+                  borderBottomColor: colors.outline
+                }
+              ]}
+            >
+              <Ionicons 
+                name="search-outline" 
+                size={20} 
+                color={colors.onSurfaceVariant} 
+                style={styles.suggestionIcon} 
+              />
+              <Text style={[styles.suggestionText, { color: colors.onSurface }]}>
+                {suggestion}
+              </Text>
+            </Pressable>
           ))}
-        </View>
+        </Surface>
       )}
     </View>
   );
 
   const renderTabs = () => (
-    <View style={styles.tabsWrapper}>
+    <Surface style={[styles.tabsWrapper, { backgroundColor: colors.surface }]} elevation={0}>
       <ScrollView 
         horizontal 
         showsHorizontalScrollIndicator={false}
@@ -190,61 +235,138 @@ export default function SearchScreen({ navigation }: Props) {
               setActiveTab(tab);
               if (query) handleSearch();
             }}
-            style={[
+            style={({ pressed }) => [
               styles.tab,
-              activeTab === tab && { backgroundColor: colors.surfaceVariant }
+              { 
+                backgroundColor: activeTab === tab ? `${colors.primary}15` : 'transparent',
+                opacity: pressed ? 0.7 : 1,
+              }
             ]}
           >
             <Text style={[
               styles.tabText,
-              { color: activeTab === tab ? colors.primary : colors.onSurfaceVariant }
+              { 
+                color: activeTab === tab ? colors.primary : colors.onSurfaceVariant,
+                fontWeight: activeTab === tab ? '600' : '400'
+              }
             ]}>
               {tab}
             </Text>
           </Pressable>
         ))}
       </ScrollView>
-    </View>
+    </Surface>
   );
 
   const renderDrugResult = (result: SearchResult) => (
     <Pressable
-      style={[styles.resultCard, { backgroundColor: colors.surface }]}
-      onPress={() => navigation.navigate('DrugDetails', { id: result.id })}
+      style={({ pressed }) => [
+        styles.resultCard,
+        { 
+          backgroundColor: colors.surface,
+          opacity: pressed ? 0.7 : 1,
+          borderColor: colors.outline,
+        }
+      ]}
+      onPress={() => router.push(`/drugs/${result.id}`)}
     >
-      <View style={[styles.resultIcon, { backgroundColor: colors.primary }]}>
-        <Ionicons name="medical-outline" size={24} color="#FFFFFF" />
+      <View style={[styles.resultIcon, { backgroundColor: `${colors.primary}15` }]}>
+        <Ionicons name="medical-outline" size={24} color={colors.primary} />
       </View>
       <View style={styles.resultContent}>
-        <Text style={[styles.resultTitle, { color: colors.onSurface }]}>
+        <Text style={[styles.resultTitle, { color: colors.onSurface }]} numberOfLines={1}>
           {result.title}
         </Text>
         {result.genericName && (
-          <Text style={[styles.resultSubtitle, { color: colors.onSurfaceVariant }]}>
+          <Text style={[styles.resultSubtitle, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
             Generic: {result.genericName}
           </Text>
         )}
         {result.drugClass && (
-          <Text style={[styles.resultType, { color: colors.onSurfaceVariant }]}>
+          <Text style={[styles.resultType, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
             Class: {result.drugClass}
           </Text>
         )}
         {result.brandNames && result.brandNames.length > 0 && (
-          <View style={styles.tags}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.tagsContainer}
+            contentContainerStyle={styles.tags}
+          >
             {result.brandNames.map((brand, index) => (
               <Chip
                 key={index}
-                style={[styles.tag, { backgroundColor: colors.surfaceVariant }]}
-                textStyle={{ color: colors.onSurfaceVariant }}
+                style={[styles.tag, { backgroundColor: `${colors.primary}10` }]}
+                textStyle={[styles.tagText, { color: colors.primary }]}
               >
                 {brand}
               </Chip>
             ))}
-          </View>
+          </ScrollView>
         )}
       </View>
     </Pressable>
   );
+
+  const renderResult = (result: SearchResult) => {
+    switch (result.type) {
+      case 'drug':
+        return renderDrugResult(result);
+      default:
+        return (
+          <Pressable
+            key={result.id}
+            style={({ pressed }) => [
+              styles.resultCard,
+              { 
+                backgroundColor: colors.surface,
+                opacity: pressed ? 0.7 : 1,
+                borderColor: colors.outline,
+              }
+            ]}
+            onPress={() => handleResultPress(result)}
+          >
+            <View style={[styles.resultIcon, { backgroundColor: `${colors.primary}15` }]}>
+              <Ionicons name={getIconForType(result.type)} size={24} color={colors.primary} />
+            </View>
+            <View style={styles.resultContent}>
+              <Text style={[styles.resultTitle, { color: colors.onSurface }]} numberOfLines={1}>
+                {result.title}
+              </Text>
+              {result.specialty && (
+                <Text style={[styles.resultType, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
+                  {result.specialty} • {result.type}
+                </Text>
+              )}
+              {result.description && (
+                <Text style={[styles.resultSubtitle, { color: colors.onSurfaceVariant }]} numberOfLines={2}>
+                  {result.description}
+                </Text>
+              )}
+              {result.tags && result.tags.length > 0 && (
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.tagsContainer}
+                  contentContainerStyle={styles.tags}
+                >
+                  {result.tags.map((tag, index) => (
+                    <Chip
+                      key={tag.id || index}
+                      style={[styles.tag, { backgroundColor: `${colors.primary}10` }]}
+                      textStyle={[styles.tagText, { color: colors.primary }]}
+                    >
+                      {tag.name}
+                    </Chip>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          </Pressable>
+        );
+    }
+  };
 
   const renderSearchResults = (type: string) => {
     const currentResults = type.toLowerCase() === 'all'
@@ -253,57 +375,7 @@ export default function SearchScreen({ navigation }: Props) {
 
     return (
       <ScrollView style={styles.results}>
-        {currentResults.map((result: SearchResult) => (
-          <Pressable
-            key={result.id}
-            style={[styles.resultCard, { backgroundColor: colors.surface }]}
-            onPress={() => handleResultPress(result)}
-          >
-            <View style={[styles.resultIcon, { backgroundColor: colors.primary }]}>
-              <Ionicons 
-                name={getIconForType(result.type)} 
-                size={24} 
-                color="#FFFFFF" 
-              />
-            </View>
-            <View style={styles.resultContent}>
-              <Text style={[styles.resultTitle, { color: colors.onSurface }]}>
-                {result.title}
-              </Text>
-              <Text style={[styles.resultType, { color: colors.onSurfaceVariant }]}>
-                {result.specialty} • {result.type}
-              </Text>
-              {result.type === 'drug' && result.genericName && (
-                <Text style={[styles.resultSubtitle, { color: colors.onSurfaceVariant }]}>
-                  Generic: {result.genericName}
-                </Text>
-              )}
-              <View style={styles.tags}>
-                {result.type === 'drug' && result.brandNames ? (
-                  result.brandNames.map((brand, index) => (
-                    <Chip
-                      key={index}
-                      style={[styles.tag, { backgroundColor: colors.surfaceVariant }]}
-                      textStyle={{ color: colors.onSurfaceVariant }}
-                    >
-                      {brand}
-                    </Chip>
-                  ))
-                ) : (
-                  result.tags?.map((tag, index) => (
-                    <Chip
-                      key={tag?.id || index}
-                      style={[styles.tag, { backgroundColor: colors.surfaceVariant }]}
-                      textStyle={{ color: colors.onSurfaceVariant }}
-                    >
-                      {tag?.name}
-                    </Chip>
-                  ))
-                )}
-              </View>
-            </View>
-          </Pressable>
-        ))}
+        {currentResults.map((result: SearchResult) => renderResult(result))}
       </ScrollView>
     );
   };
@@ -352,37 +424,101 @@ export default function SearchScreen({ navigation }: Props) {
   const handleResultPress = (result: SearchResult) => {
     switch (result.type) {
       case 'drug':
-        navigation.navigate('DrugDetails', { id: result.id });
+        router.push(`/drugs/${result.id}`);
         break;
       case 'guideline':
-        navigation.navigate('Guidelines', { id: result.id });
+        router.push(`/guidelines/${result.id}`);
         break;
       case 'case':
-        navigation.navigate('Cases', { id: result.id });
+        router.push(`/cases/${result.id}`);
         break;
       case 'calculator':
-        navigation.navigate('Calculators', { id: result.id });
+        router.push(`/calculators/${result.id}`);
         break;
       case 'quiz':
-        navigation.navigate('Quizzes', { id: result.id });
+        router.push(`/quizzes/${result.id}`);
         break;
     }
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {renderSearchBar()}
-      {renderTabs()}
-      {loading ? (
-        <ActivityIndicator style={styles.loader} color={colors.primary} />
-      ) : !query ? (
-        <ScrollView style={styles.content}>
-          {renderPopularCategories()}
-        </ScrollView>
-      ) : (
-        renderSearchResults(activeTab.toLowerCase() as keyof SearchResults)
-      )}
-    </View>
+    <TouchableWithoutFeedback onPress={handleOutsidePress}>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle={Platform.OS === 'ios' ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+          <View style={[styles.header, { backgroundColor: colors.background, zIndex: 1000 }]}>
+            <Pressable onPress={handleOutsidePress}>
+              <Text style={[styles.headerTitle, { color: colors.onSurface }]}>Search</Text>
+            </Pressable>
+            {renderSearchBar()}
+            {renderTabs()}
+          </View>
+          <View style={styles.contentWrapper}>
+            <ScrollView
+              style={styles.content}
+              contentContainerStyle={styles.contentContainer}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {loading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+              ) : query ? (
+                <>
+                  {activeTab === 'All' ? (
+                    Object.entries(results).map(([type, items]) =>
+                      items.length > 0 && (
+                        <View key={type} style={styles.section}>
+                          <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>
+                            {type.charAt(0).toUpperCase() + type.slice(1)}
+                          </Text>
+                          {items.map((result: SearchResult) => renderResult(result))}
+                        </View>
+                      )
+                    )
+                  ) : (
+                    results[activeTab.toLowerCase() as keyof SearchResults].map((result) => renderResult(result))
+                  )}
+                </>
+              ) : (
+                <View style={styles.popularContainer}>
+                  <Text style={[styles.popularTitle, { color: colors.onSurface }]}>
+                    Popular Categories
+                  </Text>
+                  <View style={styles.popularGrid}>
+                    {POPULAR_CATEGORIES.map((category) => (
+                      <Pressable
+                        key={category.title}
+                        style={({ pressed }) => [
+                          styles.categoryCard,
+                          { 
+                            backgroundColor: colors.surface,
+                            opacity: pressed ? 0.7 : 1,
+                            borderColor: colors.outline,
+                          }
+                        ]}
+                        onPress={() => {
+                          setQuery(category.title);
+                          handleSearch();
+                        }}
+                      >
+                        <View style={[styles.categoryIcon, { backgroundColor: `${colors.primary}15` }]}>
+                          <Ionicons name={category.icon as any} size={24} color={colors.primary} />
+                        </View>
+                        <Text style={[styles.categoryTitle, { color: colors.onSurface }]}>
+                          {category.title}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </SafeAreaView>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -390,142 +526,230 @@ const { width } = Dimensions.get('window');
 const cardWidth = (width - 48) / 2;
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+  },
   container: {
     flex: 1,
   },
+  header: {
+    paddingTop: 8,
+    elevation: Platform.OS === 'android' ? 4 : 0,
+    zIndex: 1000,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  searchBarContainer: {
+    position: 'relative',
+    zIndex: 2,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    elevation: Platform.OS === 'android' ? 4 : 0,
+  },
+  searchBarSurface: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
   searchBar: {
-    margin: 16,
     elevation: 0,
-    borderRadius: 12,
+    borderRadius: 16,
+    height: 52,
+  },
+  suggestionsContainer: {
+    position: 'absolute',
+    top: '100%',
+    left: 16,
+    right: 16,
+    borderRadius: 16,
+    marginTop: 8,
+    overflow: 'hidden',
+    backgroundColor: 'white',
+    zIndex: 9999,
+    elevation: Platform.OS === 'android' ? 8 : 0,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  suggestionIcon: {
+    marginRight: 12,
+  },
+  suggestionText: {
+    fontSize: 15,
+    flex: 1,
   },
   tabsWrapper: {
-    height: 48,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
+    paddingVertical: 8,
+    zIndex: 1,
+    elevation: Platform.OS === 'android' ? 4 : 0,
   },
   tabsContainer: {
     flexGrow: 0,
   },
   tabsContent: {
     paddingHorizontal: 16,
+    gap: 8,
   },
   tab: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    marginRight: 8,
-    borderRadius: 8,
-    height: 36,
-    justifyContent: 'center',
+    borderRadius: 20,
   },
   tabText: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 15,
   },
   content: {
     flex: 1,
-
   },
-  loader: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  results: {
-    flex: 1,
+  contentContainer: {
     padding: 16,
+    gap: 24,
+  },
+  section: {
+    gap: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
   },
   resultCard: {
     flexDirection: 'row',
     padding: 16,
-    marginBottom: 16,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
+    borderRadius: 16,
+    borderWidth: 1,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.15,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   resultIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 16,
   },
   resultContent: {
     flex: 1,
   },
   resultTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
     marginBottom: 4,
+    letterSpacing: -0.3,
+  },
+  resultSubtitle: {
+    fontSize: 14,
+    marginBottom: 2,
   },
   resultType: {
     fontSize: 14,
     marginBottom: 8,
   },
+  tagsContainer: {
+    marginTop: 8,
+  },
   tags: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
   },
   tag: {
-    height: 32,
+    borderRadius: 8,
   },
-  categoriesSection: {
+  tagText: {
+    fontSize: 13,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  popularContainer: {
+    gap: 16,
+  },
+  popularTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    letterSpacing: -0.5,
+  },
+  popularGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  categoryCard: {
+    width: '48%',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.15,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  categoryIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  categoryTitle: {
+    fontSize: 15,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  results: {
     padding: 16,
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 16,
+  categoriesSection: {
+    gap: 16,
   },
   categoriesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 16,
+    gap: 12,
   },
-  categoryCard: {
-    width: cardWidth,
-    padding: 16,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  categoryIcon: {
-    marginBottom: 8,
-  },
-  categoryTitle: {
-    fontSize: 18,
-    fontWeight: '500',
-  },
-  searchBarContainer: {
-    margin: 16,
-    zIndex: 1000,
-  },
-  suggestionsContainer: {
-    position: 'absolute',
-    top: 56,
-    left: 0,
-    right: 0,
-    borderRadius: 8,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    maxHeight: 200,
-  },
-  suggestionItem: {
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-  },
-  resultSubtitle: {
-    fontSize: 14,
-    marginBottom: 4,
+  contentWrapper: {
+    flex: 1,
+    zIndex: 1,
   },
 });

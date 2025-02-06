@@ -1,52 +1,41 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Appearance } from 'react-native';
-import { theme as baseTheme } from '../config';
+import { useColorScheme } from 'react-native';
+import { theme } from '../config/theme';
 
-export interface ThemeColors {
-  primary: string;
-  background: string;
-  surface: string;
-  surfaceVariant: string;
-  onSurface: string;
-  onSurfaceVariant: string;
-  outline: string;
-  border: string;
-  text: string;
-}
-
-interface ThemeContextType {
+type ThemeColors = typeof theme.colors;
+type ThemeContextType = {
+  isDarkMode: boolean;
   colors: ThemeColors;
-  isDark: boolean;
   toggleTheme: () => void;
-}
+};
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [isDark, setIsDark] = useState(Appearance.getColorScheme() === 'dark');
+export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const deviceColorScheme = useColorScheme();
+  const [isDarkMode, setIsDarkMode] = useState(deviceColorScheme === 'dark');
 
   useEffect(() => {
-    const subscription = Appearance.addChangeListener(({ colorScheme }) => {
-      setIsDark(colorScheme === 'dark');
-    });
+    setIsDarkMode(deviceColorScheme === 'dark');
+  }, [deviceColorScheme]);
 
-    return () => subscription.remove();
-  }, []);
+  const toggleTheme = () => {
+    setIsDarkMode(prev => !prev);
+  };
 
-  const colors = isDark ? baseTheme.dark : baseTheme.colors;
-  const toggleTheme = () => setIsDark(!isDark);
+  const colors = isDarkMode ? { ...theme.colors, ...theme.dark } : theme.colors;
 
   return (
-    <ThemeContext.Provider value={{ colors, isDark, toggleTheme }}>
+    <ThemeContext.Provider value={{ isDarkMode, colors, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );
-}
+};
 
-export function useTheme() {
+export const useTheme = () => {
   const context = useContext(ThemeContext);
   if (context === undefined) {
     throw new Error('useTheme must be used within a ThemeProvider');
   }
   return context;
-} 
+}; 

@@ -1,13 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
-import { Text, TextInput, Button, Switch, Divider } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, Pressable, Alert, Linking, Platform, StatusBar, SafeAreaView, Animated } from 'react-native';
+import { Text, TextInput, Button, Switch, Divider, Avatar, Surface } from 'react-native-paper';
 import { useTheme } from '../providers/ThemeProvider';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../contexts/auth';
+import { useAuth } from '../providers/AuthProvider';
 import axios from 'axios';
 import { API_URL } from '../config';
-import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import { TabParamList } from '../types/navigation';
+import { useRouter } from 'expo-router';
+
+type RootStackParamList = {
+  Profile: undefined;
+  Security: undefined;
+  Billing: undefined;
+  Preferences: undefined;
+  Help: undefined;
+  Contact: undefined;
+  About: undefined;
+};
+
+type TabParamList = {
+  Home: undefined;
+  Library: { activeTab?: string };
+  Search: undefined;
+  AI: undefined;
+  Profile: undefined;
+};
 
 type TabType = 'profile' | 'favorites' | 'settings';
 
@@ -25,29 +42,35 @@ interface Settings {
   biometricAuth: boolean;
 }
 
-type Props = BottomTabScreenProps<TabParamList, 'Profile'>;
-
-export default function ProfileScreen({ navigation }: Props) {
-  const { colors, isDark, toggleTheme } = useTheme();
-  const { user, logout } = useAuth();
+export default function ProfileScreen() {
+  const router = useRouter();
+  const { colors, isDarkMode, toggleTheme } = useTheme();
+  const { user, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('profile');
   const [loading, setLoading] = useState(false);
   const [profileData, setProfileData] = useState<ProfileData>({
-    name: user?.displayName || '',
+    name: user?.name || '',
     email: user?.email || '',
     specialty: '',
     hospital: '',
-    phone: user?.phoneNumber || null,
+    phone: '',
   });
   const [settings, setSettings] = useState<Settings>({
     notifications: true,
-    darkMode: isDark,
+    darkMode: isDarkMode,
     biometricAuth: false,
   });
   const [error, setError] = useState('');
+  const fadeAnim = useState(new Animated.Value(0))[0];
 
   useEffect(() => {
     loadProfileData();
+    // Start fade-in animation
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
   const loadProfileData = async () => {
@@ -77,7 +100,7 @@ export default function ProfileScreen({ navigation }: Props) {
     }
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     Alert.alert(
       'Sign Out',
       'Are you sure you want to sign out?',
@@ -85,58 +108,95 @@ export default function ProfileScreen({ navigation }: Props) {
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Sign Out', 
-          onPress: logout,
-          style: 'destructive'
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+              // Router.replace is handled in AuthProvider
+            } catch (error) {
+              console.error('Sign out error:', error);
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
+            }
+          }
         },
       ]
     );
   };
 
   const renderHeader = () => (
-    <View style={styles.header}>
-      <View style={styles.headerContent}>
-        <View style={[styles.avatar, { backgroundColor: colors.surfaceVariant }]}>
-          <Ionicons name="person" size={40} color={colors.primary} />
+    <View style={[styles.header, { backgroundColor: colors.surface }]}>
+      <View style={styles.headerInner}>
+        <View style={styles.headerTop}>
+          <View style={styles.titleContainer}>
+            <Text style={[styles.title, { color: colors.onSurface }]}>Profile</Text>
+            <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
+              {user?.name || 'Complete your profile'}
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => router.push('/preferences')}
+            style={({ pressed }) => [
+              styles.settingsButton,
+              { 
+                backgroundColor: pressed ? colors.surfaceVariant : `${colors.primary}10`,
+              }
+            ]}
+          >
+            <Ionicons name="settings-outline" size={22} color={colors.primary} />
+          </Pressable>
         </View>
-        <Text style={[styles.headerTitle, { color: colors.onSurface }]}>
-          {profileData.name || 'Complete Your Profile'}
-        </Text>
-        <Text style={[styles.headerSubtitle, { color: colors.onSurfaceVariant }]}>
-          {profileData.specialty || 'Add your specialty'}
-        </Text>
+        
+        <View style={styles.headerProfile}>
+          <View style={[styles.avatarContainer, { backgroundColor: `${colors.primary}15` }]}>
+            <Ionicons name="person-outline" size={32} color={colors.primary} />
+          </View>
+          <View style={styles.headerInfo}>
+            <Text style={[styles.headerEmail, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
+              {user?.email}
+            </Text>
+            <Text style={[styles.headerSpecialty, { color: colors.primary }]} numberOfLines={1}>
+              {profileData.specialty || 'Add your specialty'}
+            </Text>
+          </View>
+        </View>
       </View>
     </View>
   );
 
   const renderTabs = () => (
-    <View style={[styles.tabs, { backgroundColor: colors.surfaceVariant }]}>
-      {[
-        { id: 'profile', icon: 'person-outline', label: 'Profile' },
-        { id: 'favorites', icon: 'heart-outline', label: 'Favorites' },
-        { id: 'settings', icon: 'settings-outline', label: 'Settings' }
-      ].map((tab) => (
-        <Pressable 
-          key={tab.id}
-          style={[
-            styles.tab,
-            activeTab === tab.id && { backgroundColor: colors.surface }
-          ]}
-          onPress={() => setActiveTab(tab.id as TabType)}
-        >
-          <Ionicons 
-            name={tab.icon} 
-            size={20} 
-            color={activeTab === tab.id ? colors.primary : colors.onSurfaceVariant} 
-          />
-          <Text style={[
-            styles.tabText,
-            { color: activeTab === tab.id ? colors.primary : colors.onSurfaceVariant }
-          ]}>
-            {tab.label}
-          </Text>
-        </Pressable>
-      ))}
-    </View>
+    <Surface style={[styles.tabsContainer, { backgroundColor: colors.surface }]} elevation={0}>
+      <View style={styles.tabsRow}>
+        {[
+          { id: 'profile', icon: 'person-outline', label: 'Profile' },
+          { id: 'favorites', icon: 'heart-outline', label: 'Favorites' },
+          { id: 'settings', icon: 'settings-outline', label: 'Settings' }
+        ].map((tab) => (
+          <Pressable 
+            key={tab.id}
+            style={[
+              styles.tab,
+              { backgroundColor: activeTab === tab.id ? `${colors.primary}15` : 'transparent' }
+            ]}
+            onPress={() => setActiveTab(tab.id as TabType)}
+          >
+            <Ionicons 
+              name={tab.icon} 
+              size={20} 
+              color={activeTab === tab.id ? colors.primary : colors.onSurfaceVariant} 
+            />
+            <Text style={[
+              styles.tabText,
+              { 
+                color: activeTab === tab.id ? colors.primary : colors.onSurfaceVariant,
+                fontWeight: activeTab === tab.id ? '600' : '400'
+              }
+            ]}>
+              {tab.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </Surface>
   );
 
   const renderSettingsItem = (
@@ -191,7 +251,7 @@ export default function ProfileScreen({ navigation }: Props) {
           'Dark Mode',
           'Switch between light and dark themes',
           <Switch
-            value={isDark}
+            value={isDarkMode}
             onValueChange={toggleTheme}
             color={colors.primary}
           />
@@ -210,6 +270,33 @@ export default function ProfileScreen({ navigation }: Props) {
 
       <View style={[styles.settingsSection, { backgroundColor: colors.surface }]}>
         <Text style={[styles.settingsSectionTitle, { color: colors.onSurfaceVariant }]}>
+          Account & Security
+        </Text>
+        {renderSettingsItem(
+          'shield-outline',
+          'Security Settings',
+          'Password, 2FA, Login history',
+          <Ionicons name="chevron-forward" size={24} color={colors.onSurfaceVariant} />,
+          () => router.push('/security')
+        )}
+        {renderSettingsItem(
+          'card-outline',
+          'Billing & Subscription',
+          'Manage your subscription',
+          <Ionicons name="chevron-forward" size={24} color={colors.onSurfaceVariant} />,
+          () => router.push('/subscription')
+        )}
+        {renderSettingsItem(
+          'language-outline',
+          'Preferences',
+          'Language, Theme, Accessibility',
+          <Ionicons name="chevron-forward" size={24} color={colors.onSurfaceVariant} />,
+          () => router.push('/preferences')
+        )}
+      </View>
+
+      <View style={[styles.settingsSection, { backgroundColor: colors.surface }]}>
+        <Text style={[styles.settingsSectionTitle, { color: colors.onSurfaceVariant }]}>
           Support
         </Text>
         {renderSettingsItem(
@@ -217,21 +304,42 @@ export default function ProfileScreen({ navigation }: Props) {
           'Help & FAQ',
           'Get help with the app',
           <Ionicons name="chevron-forward" size={24} color={colors.onSurfaceVariant} />,
-          () => {}
+          () => router.push('/help')
         )}
         {renderSettingsItem(
           'mail-outline',
           'Contact Us',
           'Send us your feedback',
           <Ionicons name="chevron-forward" size={24} color={colors.onSurfaceVariant} />,
-          () => {}
+          () => router.push('/contact')
         )}
         {renderSettingsItem(
           'information-circle-outline',
           'About',
           'App version 1.0.0',
           <Ionicons name="chevron-forward" size={24} color={colors.onSurfaceVariant} />,
-          () => {}
+          () => router.push('/about')
+        )}
+        {renderSettingsItem(
+          'document-text-outline',
+          'Documentation',
+          'User guides and documentation',
+          <Ionicons name="chevron-forward" size={24} color={colors.onSurfaceVariant} />,
+          () => Linking.openURL('https://docs.ymed.ai')
+        )}
+        {renderSettingsItem(
+          'shield-checkmark-outline',
+          'Privacy Policy',
+          'Read our privacy policy',
+          <Ionicons name="chevron-forward" size={24} color={colors.onSurfaceVariant} />,
+          () => Linking.openURL('https://ymed.ai/privacy')
+        )}
+        {renderSettingsItem(
+          'document-outline',
+          'Terms of Service',
+          'Read our terms of service',
+          <Ionicons name="chevron-forward" size={24} color={colors.onSurfaceVariant} />,
+          () => Linking.openURL('https://ymed.ai/terms')
         )}
       </View>
 
@@ -351,13 +459,18 @@ export default function ProfileScreen({ navigation }: Props) {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {renderHeader()}
-      {renderTabs()}
-      <ScrollView style={styles.content}>
-        {renderContent()}
-      </ScrollView>
-    </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
+      <Animated.View style={[{ flex: 1, opacity: fadeAnim }]}>
+        {renderHeader()}
+        {renderTabs()}
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}>
+          {renderContent()}
+        </ScrollView>
+      </Animated.View>
+    </SafeAreaView>
   );
 }
 
@@ -366,48 +479,87 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    padding: 16,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
-  headerContent: {
+  headerInner: {
+    gap: 20,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingTop: 12,
+  },
+  titleContainer: {
+    gap: 4,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 15,
+  },
+  headerProfile: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 16,
   },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  avatarContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  headerInfo: {
+    flex: 1,
+  },
+  headerEmail: {
+    fontSize: 15,
     marginBottom: 4,
   },
-  headerSubtitle: {
+  headerSpecialty: {
     fontSize: 16,
+    fontWeight: '600',
   },
-  tabs: {
-    flexDirection: 'row',
-    padding: 8,
-    borderRadius: 12,
+  settingsButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabsContainer: {
     marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  tabsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 4,
   },
   tab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 8,
     gap: 8,
   },
   tabText: {
     fontSize: 14,
-    fontWeight: '500',
   },
-  content: {
-    flex: 1,
+  scrollContent: {
+    padding: 16,
+    gap: 16,
   },
   form: {
     padding: 16,
@@ -487,4 +639,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 16,
   },
-}); 
+});

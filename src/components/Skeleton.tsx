@@ -1,22 +1,14 @@
-import React, { useEffect } from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
-import { useTheme } from 'react-native-paper';
+import { useEffect, useRef } from 'react';
 
 interface SkeletonProps {
-  width: number | string;
-  height: number;
-  borderRadius?: number;
+  width?: number | string;
+  height?: number | string;
   style?: any;
 }
 
-export function Skeleton({ 
-  width, 
-  height, 
-  borderRadius = 4,
-  style 
-}: SkeletonProps) {
-  const theme = useTheme();
-  const animatedValue = new Animated.Value(0);
+export default function Skeleton({ width, height, style }: SkeletonProps) {
+  const animatedValue = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.loop(
@@ -44,13 +36,7 @@ export function Skeleton({
     <Animated.View
       style={[
         styles.skeleton,
-        {
-          width,
-          height,
-          borderRadius,
-          backgroundColor: theme.colors.surfaceVariant,
-          opacity,
-        },
+        { width, height, opacity },
         style,
       ]}
     />
@@ -59,6 +45,7 @@ export function Skeleton({
 
 const styles = StyleSheet.create({
   skeleton: {
-    overflow: 'hidden',
+    backgroundColor: '#E1E9EE',
+    borderRadius: 4,
   },
 }); 

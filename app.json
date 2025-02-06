@@ -23,7 +23,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "ai.ymed.app",
       "newArchEnabled": true,
-      "associatedDomains": ["applinks:ymed.ai"],
+      "associatedDomains": [
+        "applinks:ymed.ai"
+      ],
       "config": {
         "googleSignIn": {
           "reservedClientId": "143768372586-b2q9b0oqnqkqinpi04cdnech4m016a95.apps.googleusercontent.com"
@@ -53,7 +55,10 @@
               "pathPrefix": "/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -62,7 +67,8 @@
     },
     "plugins": [
       "expo-secure-store",
-      "expo-font"
+      "expo-font",
+      "expo-router"
     ],
     "experiments": {
       "tsconfigPaths": true

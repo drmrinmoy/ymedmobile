@@ -1,293 +1,226 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Pressable, Dimensions, ActivityIndicator } from 'react-native';
-import { Text, Searchbar, Chip } from 'react-native-paper';
+import React, { useState } from 'react';
+import { View, StyleSheet, SafeAreaView, StatusBar, ScrollView, Platform, Pressable } from 'react-native';
 import { useTheme } from '../providers/ThemeProvider';
+import { Text, Searchbar, SegmentedButtons, Surface } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
-import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import axios from 'axios';
-import { API_URL } from '../config';
+import { useRouter } from 'expo-router';
+import GuidelinesList from '../components/library/GuidelinesList';
+import CasesList from '../components/library/CasesList';
+import CalculatorsList from '../components/library/CalculatorsList';
+import QuizzesList from '../components/library/QuizzesList';
+import DrugsList from '../components/library/DrugsList';
 
-type TabParamList = {
-  Library: { activeTab?: string } | undefined;
-  [key: string]: undefined | object;
-};
+type LibrarySection = 'guidelines' | 'cases' | 'calculators' | 'quizzes' | 'drugs';
 
-type Props = BottomTabScreenProps<TabParamList, 'Library'>;
-
-interface ContentItem {
-  id: string;
-  title: string;
-  description: string;
-  specialty: string;
-  tags: Array<{ id: string; name: string }>;
-  type: 'guidelines' | 'cases' | 'calculators' | 'quizzes';
-}
-
-const TABS = ['Guidelines', 'Cases', 'Calculators', 'Quizzes'];
-
-export default function LibraryScreen({ navigation, route }: Props) {
+export default function LibraryScreen() {
   const { colors } = useTheme();
-  const [activeTab, setActiveTab] = useState('Guidelines');
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [content, setContent] = useState<ContentItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [section, setSection] = useState<LibrarySection>('guidelines');
 
-  useEffect(() => {
-    loadContent();
-  }, [activeTab]);
-
-  useEffect(() => {
-    // Listen for route params changes
-    if (route.params?.activeTab && TABS.includes(route.params.activeTab)) {
-      setActiveTab(route.params.activeTab);
-    }
-  }, [route.params?.activeTab]);
-
-  const loadContent = async () => {
-    setLoading(true);
-    setError('');
-    
-    try {
-      const response = await axios.get(`${API_URL}/api/${activeTab.toLowerCase()}`);
-      setContent(response.data || []);
-    } catch (error) {
-      console.error('Error loading content:', error);
-      setError('Failed to load content. Please try again.');
-      setContent([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filteredContent = content.filter(item => 
-    item?.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item?.specialty?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item?.tags?.some(tag => tag?.name?.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
-
-  const getIconForType = (type: string) => {
+  const handleItemPress = (type: LibrarySection, id: string) => {
     switch (type) {
-      case 'guidelines': return 'book-outline';
-      case 'cases': return 'document-text-outline';
-      case 'calculators': return 'calculator-outline';
-      case 'quizzes': return 'help-circle-outline';
-      default: return 'document-outline';
+      case 'guidelines':
+        router.push(`/guidelines/${id}`);
+        break;
+      case 'cases':
+        router.push(`/cases/${id}`);
+        break;
+      case 'calculators':
+        router.push(`/calculators/${id}`);
+        break;
+      case 'quizzes':
+        router.push(`/quizzes/${id}`);
+        break;
+      case 'drugs':
+        router.push(`/drugs/${id}`);
+        break;
     }
   };
 
-  const handleTabPress = (tab: string) => {
-    setActiveTab(tab);
-    setSearchQuery('');
-    setContent([]);
-  };
-  const handleResultPress = (result: ContentItem) => {
-    console.log('Pressed item:', result);
-    
-    const screenMap = {
-      guidelines: 'Guidelines',
-      cases: 'Cases',
-      calculators: 'Calculators',
-      quizzes: 'Quizzes'
-    } as const;
-
-    const screen = screenMap[result.type];
-    if (screen) {
-      console.log('Navigating to:', screen, { id: result.id });
-      navigation.navigate(screen, { id: result.id });
+  const renderContent = () => {
+    switch (section) {
+      case 'guidelines':
+        return <GuidelinesList searchQuery={searchQuery} onItemPress={(id) => handleItemPress('guidelines', id)} />;
+      case 'cases':
+        return <CasesList searchQuery={searchQuery} onItemPress={(id) => handleItemPress('cases', id)} />;
+      case 'calculators':
+        return <CalculatorsList searchQuery={searchQuery} onItemPress={(id) => handleItemPress('calculators', id)} />;
+      case 'quizzes':
+        return <QuizzesList searchQuery={searchQuery} onItemPress={(id) => handleItemPress('quizzes', id)} />;
+      case 'drugs':
+        return <DrugsList searchQuery={searchQuery} onItemPress={(id) => handleItemPress('drugs', id)} />;
     }
   };
-
-  const renderTabs = () => (
-    <ScrollView 
-      horizontal 
-      showsHorizontalScrollIndicator={false}
-      style={styles.tabsContainer}
-      contentContainerStyle={styles.tabsContent}
-    >
-      {TABS.map((tab) => (
-        <Pressable
-          key={tab}
-          onPress={() => handleTabPress(tab)}
-          style={[
-            styles.tab,
-            activeTab === tab && { backgroundColor: colors.surfaceVariant }
-          ]}
-        >
-          <Text style={[
-            styles.tabText,
-            { color: activeTab === tab ? colors.primary : colors.onSurfaceVariant }
-          ]}>
-            {tab}
-          </Text>
-        </Pressable>
-      ))}
-    </ScrollView>
-  );
-
-  const renderContent = () => (
-    <ScrollView style={styles.content}>
-      {loading ? (
-        <ActivityIndicator style={styles.loader} color={colors.primary} />
-      ) : filteredContent.length > 0 ? (
-        filteredContent.map((item) => (
-          <Pressable
-            key={item.id}
-            style={[styles.card, { backgroundColor: colors.surface }]}
-            onPress={() => {
-              console.log('Card pressed:', item);
-              handleResultPress(item);
-            }}
-          >
-            <View style={[styles.cardIcon, { backgroundColor: colors.primary }]}>
-              <Ionicons 
-                name={getIconForType(item.type)} 
-                size={24} 
-                color="#FFFFFF" 
-              />
-            </View>
-            <View style={styles.cardContent}>
-              <Text style={[styles.cardTitle, { color: colors.onSurface }]}>
-                {item.title}
-              </Text>
-              <Text style={[styles.cardSpecialty, { color: colors.onSurfaceVariant }]}>
-                {item.specialty} • {item.type}
-              </Text>
-              <View style={styles.tags}>
-                {item?.tags?.map((tag, index) => (
-                  <Chip
-                    key={tag?.id || index}
-                    style={[styles.tag, { backgroundColor: colors.surfaceVariant }]}
-                    textStyle={{ color: colors.onSurfaceVariant }}
-                  >
-                    {tag?.name}
-                  </Chip>
-                ))}
-              </View>
-            </View>
-          </Pressable>
-        ))
-      ) : (
-        <Text style={[styles.emptyText, { color: colors.onSurfaceVariant }]}>
-          No {activeTab.toLowerCase()} available
-        </Text>
-      )}
-    </ScrollView>
-  );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <Searchbar
-          placeholder={`Search ${activeTab.toLowerCase()}...`}
-          onChangeText={setSearchQuery}
-          value={searchQuery}
-          style={[styles.searchBar, { backgroundColor: colors.surfaceVariant }]}
-          iconColor={colors.onSurfaceVariant}
-          inputStyle={{ color: colors.onSurface }}
-          placeholderTextColor={colors.onSurfaceVariant}
-        />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={Platform.OS === 'ios' ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.header, { backgroundColor: colors.background }]}>
+          <View style={styles.headerTop}>
+            <Text style={[styles.headerTitle, { color: colors.onSurface }]}>Library</Text>
+            <Pressable
+              onPress={() => router.push('/bookmarks')}
+              style={({ pressed }) => [
+                styles.headerButton,
+                { opacity: pressed ? 0.7 : 1 }
+              ]}
+            >
+              <Ionicons name="bookmark-outline" size={24} color={colors.onSurface} />
+            </Pressable>
+          </View>
+
+          <View style={styles.searchBarContainer}>
+            <Surface style={[styles.searchBarSurface, { backgroundColor: colors.surface }]} elevation={2}>
+              <Searchbar
+                placeholder="Search library..."
+                onChangeText={setSearchQuery}
+                value={searchQuery}
+                style={[styles.searchBar, { backgroundColor: colors.surfaceVariant }]}
+                inputStyle={{ 
+                  color: colors.onSurface,
+                  fontSize: 16,
+                }}
+                iconColor={colors.onSurfaceVariant}
+                placeholderTextColor={colors.onSurfaceVariant}
+              />
+            </Surface>
+          </View>
+
+          <Surface style={[styles.tabsWrapper, { backgroundColor: colors.surface }]} elevation={0}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.tabsContainer}
+              contentContainerStyle={styles.tabsContent}
+            >
+              {[
+                { value: 'guidelines', label: 'Guidelines', icon: 'document-text' },
+                { value: 'cases', label: 'Cases', icon: 'flask' },
+                { value: 'calculators', label: 'Calculators', icon: 'calculator' },
+                { value: 'quizzes', label: 'Quizzes', icon: 'school' },
+                { value: 'drugs', label: 'Drugs', icon: 'medical' }
+              ].map((tab) => (
+                <Pressable
+                  key={tab.value}
+                  onPress={() => setSection(tab.value as LibrarySection)}
+                  style={({ pressed }) => [
+                    styles.tab,
+                    { 
+                      backgroundColor: section === tab.value ? `${colors.primary}15` : 'transparent',
+                      opacity: pressed ? 0.7 : 1,
+                    }
+                  ]}
+                >
+                  <Ionicons 
+                    name={tab.icon as any} 
+                    size={18} 
+                    color={section === tab.value ? colors.primary : colors.onSurfaceVariant} 
+                    style={styles.tabIcon}
+                  />
+                  <Text style={[
+                    styles.tabText,
+                    { 
+                      color: section === tab.value ? colors.primary : colors.onSurfaceVariant,
+                      fontWeight: section === tab.value ? '600' : '400'
+                    }
+                  ]}>
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Surface>
+        </View>
+
+        <ScrollView 
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
+          {renderContent()}
+        </ScrollView>
       </View>
-      {renderTabs()}
-      {error ? (
-        <Text style={[styles.error, { color: colors.primary }]}>{error}</Text>
-      ) : (
-        renderContent()
-      )}
-    </View>
+    </SafeAreaView>
   );
 }
 
-const { width } = Dimensions.get('window');
-
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+  },
   container: {
     flex: 1,
   },
   header: {
-    padding: 16,
+    paddingTop: 8,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  searchBar: {
-    elevation: 0,
-    borderRadius: 12,
-  },
-  tabsContainer: {
-    height: 48,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-    flexGrow: 0,
-  },
-  tabsContent: {
-    paddingHorizontal: 16,
-  },
-  tab: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginRight: 8,
-    borderRadius: 8,
-  },
-  tabText: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  card: {
+  headerTop: {
     flexDirection: 'row',
-    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
     marginBottom: 16,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
   },
-  cardIcon: {
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+  },
+  headerButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
   },
-  cardContent: {
-    flex: 1,
+  searchBarContainer: {
+    position: 'relative',
+    zIndex: 2,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
   },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 4,
+  searchBarSurface: {
+    borderRadius: 16,
+    overflow: 'hidden',
   },
-  cardSpecialty: {
-    fontSize: 14,
-    marginBottom: 8,
+  searchBar: {
+    elevation: 0,
+    borderRadius: 16,
+    height: 52,
   },
-  tags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  tabsWrapper: {
+    paddingVertical: 8,
+    zIndex: 1,
+  },
+  tabsContainer: {
+    flexGrow: 0,
+  },
+  tabsContent: {
+    paddingHorizontal: 16,
     gap: 8,
   },
-  tag: {
-    height: 32,
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 8,
   },
-  error: {
+  tabIcon: {
+    marginRight: 4,
+  },
+  tabText: {
+    fontSize: 15,
+  },
+  content: {
+    flex: 1,
+  },
+  contentContainer: {
     padding: 16,
-    textAlign: 'center',
-  },
-  loader: {
-    marginTop: 32,
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 32,
-    fontSize: 16,
+    paddingTop: 8,
   },
 }); 

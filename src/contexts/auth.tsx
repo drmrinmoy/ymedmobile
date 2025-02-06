@@ -3,7 +3,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL } from '../config';
+import { API_URL, API_ENDPOINTS } from '../config';
 import Constants from 'expo-constants';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -13,7 +13,6 @@ interface User {
   email: string;
   name?: string;
   photoUrl?: string;
-  token?: string;
 }
 
 interface AuthResponse {
@@ -66,8 +65,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadStoredUser = async () => {
     try {
-      const userString = await AsyncStorage.getItem('user');
-      if (userString) {
+      const [userString, token] = await Promise.all([
+        AsyncStorage.getItem('user'),
+        AsyncStorage.getItem('token')
+      ]);
+
+      if (userString && token) {
         const userData = JSON.parse(userString);
         setUser(userData);
       }
@@ -103,9 +106,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string): Promise<AuthResponse> => {
     try {
-      console.log('Attempting login to:', `${API_URL}/api/auth/login`);
+      console.log('Attempting login to:', `${API_URL}${API_ENDPOINTS.login}`);
       
-      const response = await fetch(`${API_URL}/api/auth/login`, {
+      const response = await fetch(`${API_URL}${API_ENDPOINTS.login}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -120,18 +123,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!response.ok) {
         return {
           success: false,
-          message: data.message || 'Invalid credentials',
+          message: data.error || 'Invalid credentials',
         };
       }
 
-      if (data.token) {
+      if (data.token && data.user) {
         const userData = {
           id: data.user.id,
           email: data.user.email,
           name: data.user.name,
-          token: data.token,
         };
-        await AsyncStorage.setItem('user', JSON.stringify(userData));
+        
+        await Promise.all([
+          AsyncStorage.setItem('user', JSON.stringify(userData)),
+          AsyncStorage.setItem('token', data.token)
+        ]);
+        
         setUser(userData);
         return { success: true };
       }
@@ -204,7 +211,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      await AsyncStorage.removeItem('user');
+      await Promise.all([
+        AsyncStorage.removeItem('user'),
+        AsyncStorage.removeItem('token')
+      ]);
       setUser(null);
     } catch (error) {
       console.error('Logout error:', error);

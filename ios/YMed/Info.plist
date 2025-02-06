@@ -29,6 +29,7 @@
       <dict>
         <key>CFBundleURLSchemes</key>
         <array>
+          <string>ymed</string>
           <string>ai.ymed.app</string>
         </array>
       </dict>
@@ -48,6 +49,10 @@
     </dict>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
+    <key>NSUserActivityTypes</key>
+    <array>
+      <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>
+    </array>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>

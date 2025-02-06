@@ -8,11 +8,16 @@ import {
   ScrollView,
 } from 'react-native';
 import { Text, TextInput, Button, Divider } from 'react-native-paper';
-import { useAuth } from '../contexts/auth';
+import { useAuth } from '../providers/AuthProvider';
 import { useTheme } from '../providers/ThemeProvider';
 import { AppLogo } from '../components/AppLogo';
 import { Ionicons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import axios from 'axios';
+import { API_URL, API_ENDPOINTS } from '../config';
+import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+// Get the API URL from environment variables or use a default
 
 export function LoginScreen() {
   const { colors } = useTheme();
@@ -20,16 +25,14 @@ export function LoginScreen() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { login, loginWithGoogle, loginWithApple } = useAuth();
+  const { signIn } = useAuth();
 
   const handleGoogleSignIn = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await loginWithGoogle();
-      if (!response.success) {
-        setError(response.message || 'Google Sign In failed');
-      }
+      // TODO: Implement Google Sign In
+      setError('Google Sign In not implemented yet');
     } catch (error: any) {
       setError('Something went wrong with Google Sign In');
       console.error(error);
@@ -42,10 +45,8 @@ export function LoginScreen() {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await loginWithApple();
-      if (!response.success) {
-        setError(response.message || 'Apple Sign In failed');
-      }
+      // TODO: Implement Apple Sign In
+      setError('Apple Sign In not implemented yet');
     } catch (error: any) {
       setError('Something went wrong with Apple Sign In');
       console.error(error);
@@ -82,18 +83,47 @@ export function LoginScreen() {
     }
 
     setIsLoading(true);
+
     try {
-      const response = await login(email.trim(), password);
-      if (!response.success) {
-        setError(response.message || 'Login failed. Please check your credentials.');
+      console.log('Attempting login to:', `${API_URL}${API_ENDPOINTS.login}`);
+      const response = await axios.post(`${API_URL}${API_ENDPOINTS.login}`, {
+        email: email.trim(),
+        password
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        timeout: 10000
+      });
+
+      console.log('Login response:', response.data);
+
+      // Check if we have both token and user data
+      if (response.data.token && response.data.user) {
+        const { token, user } = response.data;
+        await signIn(token, user);
+        await AsyncStorage.setItem('token', token);
+        router.replace('/(tabs)');
+      } else {
+        setError('Invalid response from server. Please try again.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
-      setError(
-        error instanceof Error
-          ? error.message
-          : 'Unable to connect to the server. Please check your internet connection.'
-      );
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNABORTED') {
+          setError('Request timed out. Please try again.');
+        } else if (!error.response) {
+          setError('Unable to connect to the server. Please check your internet connection.');
+          console.log('API URL:', API_URL);
+        } else {
+          const errorMessage = error.response.data?.message || 'An error occurred during login.';
+          console.error('Server error:', error.response.data);
+          setError(errorMessage);
+        }
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
